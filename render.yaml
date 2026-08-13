@@ -1,5 +1,47 @@
 services:
   - type: web
+    runtime: image
+    name: dragonforce-n8n
+    image:
+      url: docker.io/n8nio/n8n:latest
+    plan: starter
+    disk:
+      name: n8n-data
+      mountPath: /home/node
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 5678
+      - key: N8N_PORT
+        value: 5678
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_HOST
+        fromService:
+          type: web
+          name: dragonforce-n8n
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: N8N_EDITOR_BASE_URL
+        fromService:
+          type: web
+          name: dragonforce-n8n
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: N8N_WEBHOOK_URL
+        fromService:
+          type: web
+          name: dragonforce-n8n
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: dragonforce-n8n
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: N8N_SECURE_COOKIE
+        value: true
+
+  - type: web
     runtime: static
     name: dragonforce-sorteios
     buildCommand: npm ci && npm run build
@@ -14,4 +56,7 @@ services:
         value: public, max-age=31536000, immutable
     envVars:
       - key: VITE_N8N_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: dragonforce-n8n
+          envVarKey: RENDER_EXTERNAL_URL

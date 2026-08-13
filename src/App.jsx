@@ -2,7 +2,12 @@
 import * as XLSX from 'xlsx'
 import { getPreviewPayload, parseMaybeJson, parseNotes, resolveTeamName } from './lib/notes'
 
-const N8N_BASE_URL = (import.meta.env.VITE_N8N_BASE_URL || 'http://127.0.0.1:5678/webhook').replace(/\/+$/, '')
+function normalizeN8nBaseUrl(value) {
+  const baseUrl = String(value || 'http://127.0.0.1:5678/webhook').replace(/\/+$/, '')
+  return /\/webhook$/i.test(baseUrl) ? baseUrl : `${baseUrl}/webhook`
+}
+
+const N8N_BASE_URL = normalizeN8nBaseUrl(import.meta.env.VITE_N8N_BASE_URL)
 
 const TOURNAMENT_WORKFLOWS = [
   {
