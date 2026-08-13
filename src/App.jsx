@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import { getPreviewPayload, parseMaybeJson, parseNotes, resolveTeamName } from './lib/notes'
 
 function normalizeN8nBaseUrl(value) {
-  const baseUrl = String(import.meta.env.PROD ? '/webhook' : value || 'http://127.0.0.1:5678/webhook').replace(/\/+$/, '')
+  const baseUrl = String(value || 'http://127.0.0.1:5678/webhook').replace(/\/+$/, '')
   return /\/webhook$/i.test(baseUrl) ? baseUrl : `${baseUrl}/webhook`
 }
 
@@ -502,6 +502,7 @@ function extractMatchesFromN8nResponse(responseData, fallbackFormat = 'champions
 function getWorkflowUrl(workflow) {
   const path = workflow?.webhook || ''
   if (/^https?:\/\//i.test(path)) return path
+  if (import.meta.env.PROD) return `/webhook/${path.replace(/^\/+/, '')}`
   return `${N8N_BASE_URL}/${path.replace(/^\/+/, '')}`
 }
 
@@ -509,6 +510,7 @@ function getDrawWorkflowUrl(workflow, formatConfig) {
   if (workflow?.key !== 'sorteio') return getWorkflowUrl(workflow)
   const path = formatConfig?.webhook || workflow?.webhook || ''
   if (/^https?:\/\//i.test(path)) return path
+  if (import.meta.env.PROD) return `/webhook/${path.replace(/^\/+/, '')}`
   return `${N8N_BASE_URL}/${path.replace(/^\/+/, '')}`
 }
 
