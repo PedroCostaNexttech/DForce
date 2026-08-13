@@ -42,20 +42,12 @@ services:
         value: true
 
   - type: web
-    runtime: static
+    runtime: node
     name: dragonforce-sorteios
     buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    headers:
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
+    startCommand: npm start
     envVars:
-      - key: VITE_N8N_BASE_URL
+      - key: N8N_BASE_URL
         fromService:
           type: web
           name: dragonforce-n8n

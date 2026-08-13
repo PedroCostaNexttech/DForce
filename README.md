@@ -24,20 +24,21 @@ npm run build
 ## Deploy no Render
 Este projeto está preparado para Blueprint no Render com dois serviços:
 
-- `dragonforce-sorteios`: front-end React/Vite como Static Site.
+- `dragonforce-sorteios`: front-end React/Vite como Web Service Node.
 - `dragonforce-n8n`: n8n como Web Service Docker com disco persistente.
 
-O ficheiro `render.yaml` liga automaticamente o front-end ao URL público do n8n. O front-end aceita tanto:
+O ficheiro `render.yaml` liga automaticamente o front-end ao URL público do n8n. Se criares manualmente no Render, usa estes campos para o serviço DForce:
 
-```bash
-VITE_N8N_BASE_URL=https://dragonforce-n8n.onrender.com
-```
+- Language: `Node`
+- Branch: `main`
+- Root Directory: vazio
+- Build Command: `npm ci && npm run build`
+- Start Command: `npm start`
+- Environment Variable: `N8N_BASE_URL=https://dragonforce-n8n.onrender.com`
 
-como:
+O servidor Node serve a pasta `dist` e encaminha `/webhook/*` para o n8n configurado em `N8N_BASE_URL`.
 
-```bash
-VITE_N8N_BASE_URL=https://dragonforce-n8n.onrender.com/webhook
-```
+Também podes usar `N8N_BASE_URL` com `/webhook` no fim; o servidor normaliza automaticamente.
 
 ### Workflows n8n online
 Em produção, o front-end não pode usar `127.0.0.1`. O n8n precisa de estar online no Render e os workflows têm de ser importados/ativados nessa instância.
