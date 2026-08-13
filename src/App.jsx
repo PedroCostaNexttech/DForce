@@ -539,6 +539,28 @@ async function readN8nResponse(response) {
   return { data: null, rawText, contentType }
 }
 
+function buildLocalDrawResponse(teams, format, options = {}) {
+  const normalizedFormat = String(format || 'champions').toLowerCase()
+  const shuffledTeams = shuffleArray(teams)
+  const groupSize = normalizedFormat === 'liga' ? Math.max(teams.length, 2) : 4
+  let matches = []
+
+  if (normalizedFormat === 'champions' || normalizedFormat === 'grupos' || normalizedFormat === 'qualificacao' || normalizedFormat === 'liga') {
+    matches = generateGroupMatches(shuffledTeams, groupSize)
+  } else {
+    matches = generateKnockoutMatches(shuffledTeams)
+  }
+
+  return {
+    success: true,
+    source: 'local-fallback',
+    message: 'Sorteio gerado localmente porque o webhook externo não respondeu no formato esperado.',
+    formato: normalizedFormat,
+    tournamentName: options.tournamentName || '',
+    matches,
+  }
+}
+
 export default function App() {
   const [selectedFormat, setSelectedFormat] = useState('champions')
   const [selectedWorkflow, setSelectedWorkflow] = useState('sorteio')
@@ -919,6 +941,17 @@ export default function App() {
       if (!response.ok) {
         const rawMessage = responseBody.rawText?.trim()
         const targetUrl = response.headers.get('x-dforce-target-url')
+        const canUseLocalFallback =
+          activeWorkflow.key === 'sorteio' &&
+          response.status === 404 &&
+          /Cannot\s+(POST|GET)\s+\//i.test(rawMessage || '')
+
+        if (canUseLocalFallback) {
+          const localData = buildLocalDrawResponse(teams, selectedFormat, { tournamentName })
+          responseBody.data = localData
+          responseBody.rawText = JSON.stringify(localData)
+          showError('')
+        } else {
         const parsedMessage = responseBody.data && typeof responseBody.data === 'object'
           ? responseBody.data.message || responseBody.data.error || responseBody.data.detail
           : ''
@@ -930,6 +963,7 @@ export default function App() {
           rawMessage ? `corpo: ${rawMessage.slice(0, 500)}` : 'corpo vazio',
         ].filter(Boolean).join(' | ')
         throw new Error(parsedMessage ? `${parsedMessage} | ${extra}` : extra)
+        }
       }
       const data = responseBody.data
       if (!data) {
