@@ -7,6 +7,14 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = join(__dirname, 'dist')
 const port = Number(process.env.PORT || 10000)
 const n8nBaseUrl = normalizeN8nUrl(process.env.N8N_BASE_URL || process.env.VITE_N8N_BASE_URL || '')
+const webhookUrls = {
+  'sorteio-champions': process.env.N8N_WEBHOOK_CHAMPIONS,
+  'sorteio-grupos': process.env.N8N_WEBHOOK_GRUPOS,
+  'sorteio-liga': process.env.N8N_WEBHOOK_LIGA,
+  'sorteio-qualificacao': process.env.N8N_WEBHOOK_QUALIFICACAO,
+  'sorteio-eliminatorias': process.env.N8N_WEBHOOK_ELIMINATORIAS,
+  'sorteio-taca': process.env.N8N_WEBHOOK_TACA,
+}
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -31,6 +39,18 @@ function sendText(response, status, text) {
   response.end(text)
 }
 
+function getForwardHeaders(request, targetUrl) {
+  const headers = new Headers(request.headers)
+  const target = new URL(targetUrl)
+
+  headers.set('host', target.host)
+  headers.delete('connection')
+  headers.delete('content-length')
+  headers.delete('accept-encoding')
+
+  return headers
+}
+
 function getStaticPath(urlPath) {
   const decodedPath = decodeURIComponent(urlPath.split('?')[0])
   const cleanPath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, '')
@@ -39,18 +59,23 @@ function getStaticPath(urlPath) {
 }
 
 async function proxyWebhook(request, response) {
-  if (!n8nBaseUrl) {
-    sendText(response, 502, 'N8N_BASE_URL is not configured on this Render service.')
+  const targetPath = request.url.replace(/^\/webhook\/?/, '').replace(/^\/+/, '')
+  const webhookKey = targetPath.split(/[/?#]/)[0]
+  const directWebhookUrl = webhookUrls[webhookKey]?.trim()
+
+  if (!n8nBaseUrl && !directWebhookUrl) {
+    sendText(response, 502, 'N8N_BASE_URL or a matching N8N_WEBHOOK_* variable is not configured on this Render service.')
     return
   }
 
-  const targetPath = request.url.replace(/^\/webhook\/?/, '')
-  const targetUrl = `${n8nBaseUrl}/${targetPath}`
+  const targetUrl = directWebhookUrl
+    ? `${directWebhookUrl.replace(/\/+$/, '')}${request.url.includes('?') ? `?${request.url.split('?').slice(1).join('?')}` : ''}`
+    : `${n8nBaseUrl}/${targetPath}`
 
   try {
     const upstream = await fetch(targetUrl, {
       method: request.method,
-      headers: request.headers,
+      headers: getForwardHeaders(request, targetUrl),
       body: ['GET', 'HEAD'].includes(request.method) ? undefined : request,
       duplex: 'half',
     })
