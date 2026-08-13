@@ -34,7 +34,7 @@ O ficheiro `render.yaml` liga automaticamente o front-end ao URL público do n8n
 - Root Directory: vazio
 - Build Command: `npm ci && npm run build`
 - Start Command: `npm start`
-- Environment Variable: `N8N_BASE_URL=https://dragonforce-n8n.onrender.com`
+- Environment Variable: `N8N_BASE_URL=https://afp-app-gestao-de-torneios-5bk5.onrender.com`
 
 O servidor Node serve a pasta `dist` e encaminha `/webhook/*` para o n8n configurado em `N8N_BASE_URL`.
 
@@ -46,7 +46,12 @@ Em produção, o front-end não pode usar `127.0.0.1`. O n8n precisa de estar on
 Depois do deploy do serviço `dragonforce-n8n`, entra no URL público do n8n, cria a conta inicial, importa os workflows e confirma que cada Webhook node está ativo em modo Production.
 
 Os endpoints esperados são:
-- `/sorteio-ficheiro`
+- `/sorteio-champions`
+- `/sorteio-grupos`
+- `/sorteio-liga`
+- `/sorteio-qualificacao`
+- `/sorteio-eliminatorias`
+- `/sorteio-taca`
 - `/torneio-criar`
 - `/torneio-equipas`
 - `/torneio-resultados`

@@ -64,31 +64,37 @@ const DRAW_FORMATS = [
     key: 'champions',
     label: 'Champions',
     description: 'Grupos com fase a eliminar. Define quantas equipas passam por grupo.',
+    webhook: 'sorteio-champions',
   },
   {
     key: 'grupos',
     label: 'Fase de grupos',
     description: 'Sorteio de grupos com jogos todos contra todos dentro de cada grupo.',
+    webhook: 'sorteio-grupos',
   },
   {
     key: 'liga',
     label: 'Liga',
     description: 'Todos contra todos numa tabela geral, sem fase eliminatória.',
+    webhook: 'sorteio-liga',
   },
   {
     key: 'qualificacao',
     label: 'Qualificação',
     description: 'Grupos de qualificação com calendário completo por grupo.',
+    webhook: 'sorteio-qualificacao',
   },
   {
     key: 'eliminatorias',
     label: 'Eliminatórias',
     description: 'Quadro a eliminar com rondas até à final.',
+    webhook: 'sorteio-eliminatorias',
   },
   {
     key: 'taca',
     label: 'Taça',
     description: 'Formato de taça em eliminatórias diretas.',
+    webhook: 'sorteio-taca',
   },
 ]
 
@@ -475,6 +481,13 @@ function getWorkflowUrl(workflow) {
   return `${N8N_BASE_URL}/${path.replace(/^\/+/, '')}`
 }
 
+function getDrawWorkflowUrl(workflow, formatConfig) {
+  if (workflow?.key !== 'sorteio') return getWorkflowUrl(workflow)
+  const path = formatConfig?.webhook || workflow?.webhook || ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${N8N_BASE_URL}/${path.replace(/^\/+/, '')}`
+}
+
 function appendJson(formData, key, value) {
   formData.append(key, JSON.stringify(value ?? null))
 }
@@ -850,7 +863,7 @@ export default function App() {
         return
       }
 
-      const response = await fetch(getWorkflowUrl(activeWorkflow), { method: 'POST', body: formData })
+      const response = await fetch(getDrawWorkflowUrl(activeWorkflow, selectedFormatConfig), { method: 'POST', body: formData })
       const responseBody = await readN8nResponse(response)
       if (!response.ok) {
         const rawMessage = responseBody.rawText?.trim()
