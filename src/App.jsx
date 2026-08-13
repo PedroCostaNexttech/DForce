@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import { getPreviewPayload, parseMaybeJson, parseNotes, resolveTeamName } from './lib/notes'
 
 function normalizeN8nBaseUrl(value) {
-  const baseUrl = String(value || (import.meta.env.PROD ? '/webhook' : 'http://127.0.0.1:5678/webhook')).replace(/\/+$/, '')
+  const baseUrl = String(import.meta.env.PROD ? '/webhook' : value || 'http://127.0.0.1:5678/webhook').replace(/\/+$/, '')
   return /\/webhook$/i.test(baseUrl) ? baseUrl : `${baseUrl}/webhook`
 }
 
