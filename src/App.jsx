@@ -508,10 +508,9 @@ function getWorkflowUrl(workflow) {
 
 function getDrawWorkflowUrl(workflow, formatConfig) {
   if (workflow?.key !== 'sorteio') return getWorkflowUrl(workflow)
-  const path = formatConfig?.webhook || workflow?.webhook || ''
+  const path = formatConfig?.key || workflow?.webhook || ''
   if (/^https?:\/\//i.test(path)) return path
-  if (import.meta.env.PROD) return `/webhook/${path.replace(/^\/+/, '')}`
-  return `${N8N_BASE_URL}/${path.replace(/^\/+/, '')}`
+  return `/api/sorteio/${path.replace(/^\/+/, '')}`
 }
 
 function appendJson(formData, key, value) {

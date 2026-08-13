@@ -15,6 +15,14 @@ const webhookUrls = {
   'sorteio-eliminatorias': process.env.N8N_WEBHOOK_ELIMINATORIAS,
   'sorteio-taca': process.env.N8N_WEBHOOK_TACA,
 }
+const drawFormatToWebhook = {
+  champions: 'sorteio-champions',
+  grupos: 'sorteio-grupos',
+  liga: 'sorteio-liga',
+  qualificacao: 'sorteio-qualificacao',
+  eliminatorias: 'sorteio-eliminatorias',
+  taca: 'sorteio-taca',
+}
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -56,6 +64,22 @@ function getForwardHeaders(request, targetUrl) {
   return headers
 }
 
+function getQueryString(url) {
+  return url.includes('?') ? `?${url.split('?').slice(1).join('?')}` : ''
+}
+
+function resolveWebhookTarget(webhookKey, requestUrl = '') {
+  const directWebhookUrl = webhookUrls[webhookKey]?.trim()
+
+  if (!n8nBaseUrl && !directWebhookUrl) {
+    return null
+  }
+
+  return directWebhookUrl
+    ? `${directWebhookUrl.replace(/\/+$/, '')}${getQueryString(requestUrl)}`
+    : `${n8nBaseUrl}/${webhookKey}${getQueryString(requestUrl)}`
+}
+
 function getStaticPath(urlPath) {
   const decodedPath = decodeURIComponent(urlPath.split('?')[0])
   const cleanPath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, '')
@@ -66,16 +90,12 @@ function getStaticPath(urlPath) {
 async function proxyWebhook(request, response) {
   const targetPath = request.url.replace(/^\/webhook\/?/, '').replace(/^\/+/, '')
   const webhookKey = targetPath.split(/[/?#]/)[0]
-  const directWebhookUrl = webhookUrls[webhookKey]?.trim()
+  const targetUrl = resolveWebhookTarget(webhookKey, request.url)
 
-  if (!n8nBaseUrl && !directWebhookUrl) {
+  if (!targetUrl) {
     sendText(response, 502, 'N8N_BASE_URL or a matching N8N_WEBHOOK_* variable is not configured on this Render service.')
     return
   }
-
-  const targetUrl = directWebhookUrl
-    ? `${directWebhookUrl.replace(/\/+$/, '')}${request.url.includes('?') ? `?${request.url.split('?').slice(1).join('?')}` : ''}`
-    : `${n8nBaseUrl}/${targetPath}`
 
   console.log(`[webhook-proxy] ${request.method} ${request.url} -> ${targetUrl}`)
 
@@ -84,7 +104,7 @@ async function proxyWebhook(request, response) {
       requestUrl: request.url,
       targetPath,
       webhookKey,
-      usingDirectWebhookUrl: !!directWebhookUrl,
+      usingDirectWebhookUrl: !!webhookUrls[webhookKey]?.trim(),
       targetUrl,
       configuredBaseUrl: n8nBaseUrl || null,
     })
@@ -123,6 +143,80 @@ async function proxyWebhook(request, response) {
   }
 }
 
+async function proxyDrawRequest(request, response) {
+  const rawFormat = request.url.replace(/^\/api\/sorteio\/?/, '').split(/[/?#]/)[0]
+  const format = decodeURIComponent(rawFormat || '').trim().toLowerCase()
+  const webhookKey = drawFormatToWebhook[format]
+
+  if (!webhookKey) {
+    sendJson(response, 400, {
+      success: false,
+      error: `Formato de sorteio inválido: ${format || '(vazio)'}.`,
+    })
+    return
+  }
+
+  const targetUrl = resolveWebhookTarget(webhookKey, request.url)
+
+  if (!targetUrl) {
+    sendJson(response, 502, {
+      success: false,
+      error: `Webhook n8n não configurado para o formato "${format}".`,
+      expectedEnv: `N8N_WEBHOOK_${format.toUpperCase()}`,
+    })
+    return
+  }
+
+  console.log(`[draw-api] ${request.method} /api/sorteio/${format} -> ${targetUrl}`)
+
+  if (request.url.includes('__debug=1')) {
+    sendJson(response, 200, {
+      format,
+      webhookKey,
+      targetUrl,
+      usingDirectWebhookUrl: !!webhookUrls[webhookKey]?.trim(),
+      configuredBaseUrl: n8nBaseUrl || null,
+    })
+    return
+  }
+
+  try {
+    const upstream = await fetch(targetUrl, {
+      method: request.method,
+      headers: getForwardHeaders(request, targetUrl),
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request,
+      duplex: 'half',
+    })
+
+    response.writeHead(upstream.status, {
+      ...Object.fromEntries(upstream.headers.entries()),
+      'x-dforce-target-url': targetUrl,
+    })
+
+    if (upstream.body) {
+      await upstream.body.pipeTo(new WritableStream({
+        write(chunk) {
+          response.write(Buffer.from(chunk))
+        },
+        close() {
+          response.end()
+        },
+        abort(error) {
+          response.destroy(error)
+        },
+      }))
+    } else {
+      response.end()
+    }
+  } catch (error) {
+    sendJson(response, 502, {
+      success: false,
+      error: `Não foi possível contactar o webhook n8n: ${error.message}`,
+      targetUrl,
+    })
+  }
+}
+
 function serveStatic(request, response) {
   const staticPath = getStaticPath(request.url)
   const filePath = existsSync(staticPath) && statSync(staticPath).isFile()
@@ -140,6 +234,11 @@ function serveStatic(request, response) {
 }
 
 const server = http.createServer((request, response) => {
+  if (request.url.startsWith('/api/sorteio/')) {
+    proxyDrawRequest(request, response)
+    return
+  }
+
   if (request.url.startsWith('/webhook')) {
     proxyWebhook(request, response)
     return
