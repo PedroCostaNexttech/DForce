@@ -206,6 +206,51 @@ textarea:focus-visible {
 .format-desc { font-size: 12px; color: var(--muted); line-height: 1.5; font-weight: 600; }
 .format-auto-badge { display: inline-block; background: var(--blue-light); color: var(--blue); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 8px; border-radius: 100px; margin-top: 6px; }
 
+.compatibility-warning {
+  width: min(760px, calc(100% - 48px));
+  margin: -4px auto 24px;
+  padding: 16px 18px;
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #7c3e00;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(217, 119, 6, 0.08);
+}
+.compatibility-warning__title {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.compatibility-warning p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.compatibility-warning__actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.warning-confirm-btn {
+  min-height: 36px;
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: #d97706;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.warning-confirm-btn:hover {
+  background: #b45309;
+}
+
 .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; padding: 0 24px 20px; }
 .workflow-btn {
   position: relative;
@@ -396,6 +441,7 @@ textarea:focus-visible {
   .workflow-grid { grid-template-columns: 1fr; }
   .workflow-btn { min-height: 88px; }
   .submit-wrap, .upload-zone, .error-box, .success-box { margin-left: 16px; margin-right: 16px; }
+  .compatibility-warning { width: calc(100% - 32px); }
   .submit-wrap { padding-left: 0; padding-right: 0; }
   .phase-squares-wrap, .group-squares-grid { grid-template-columns: 1fr; }
   .phase-square, .group-square-card { aspect-ratio: auto; min-height: 72px; }

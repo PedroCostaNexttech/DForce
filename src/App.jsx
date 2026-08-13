@@ -112,6 +112,30 @@ const SUPPORTED_FILE_EXTENSIONS = ['.pdf', '.csv', '.xls', '.xlsx', '.xlsm', '.x
 
 let pdfRuntimePromise
 
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function detectDrawFormatFromFileName(fileName) {
+  const name = normalizeText(fileName)
+  if (!name) return ''
+
+  const checks = [
+    ['champions', /\bchampions?\b|champ/i],
+    ['qualificacao', /qualific/i],
+    ['eliminatorias', /eliminator|eliminatoria|knockout/i],
+    ['grupos', /\bgrupos?\b|fase[-_\s]*de[-_\s]*grupos?/i],
+    ['liga', /\bliga\b|league/i],
+    ['taca', /\btaca\b|\bcup\b/i],
+  ]
+
+  const match = checks.find(([, pattern]) => pattern.test(name))
+  return match?.[0] || ''
+}
+
 async function getPdfRuntime() {
   if (!pdfRuntimePromise) {
     pdfRuntimePromise = Promise.all([
@@ -545,6 +569,8 @@ export default function App() {
   const [lastMatchesData, setLastMatchesData] = useState([])
   const [workflowResponse, setWorkflowResponse] = useState(null)
   const [fileName, setFileName] = useState('ficheiro.pdf')
+  const [detectedFileFormat, setDetectedFileFormat] = useState('')
+  const [formatMismatchConfirmed, setFormatMismatchConfirmed] = useState(false)
 
   const activeWorkflow = useMemo(
     () => TOURNAMENT_WORKFLOWS.find((workflow) => workflow.key === selectedWorkflow) || TOURNAMENT_WORKFLOWS[0],
@@ -554,6 +580,11 @@ export default function App() {
     () => DRAW_FORMATS.find((format) => format.key === selectedFormat) || DRAW_FORMATS[0],
     [selectedFormat],
   )
+  const detectedFileFormatConfig = useMemo(
+    () => DRAW_FORMATS.find((format) => format.key === detectedFileFormat) || null,
+    [detectedFileFormat],
+  )
+  const hasFormatMismatch = !!selectedFile && !!detectedFileFormat && detectedFileFormat !== selectedFormat
   const previewPayload = useMemo(() => getPreviewPayload(notes, extractedTeams), [notes, extractedTeams])
   const hasStructuredNotes = previewPayload.ordemNotas.length > 0 || previewPayload.gruposNotas.length > 0 || Object.keys(previewPayload.earliestTimes).length > 0 || previewPayload.restrictions.length > 0
 
@@ -588,12 +619,15 @@ export default function App() {
     if (!hasSupportedType && !hasSupportedExtension) {
       setSelectedFile(null)
       setExtractedTeams([])
+      setDetectedFileFormat('')
+      setFormatMismatchConfirmed(false)
       setFileName('ficheiro não suportado')
       showError(`Escolhe um ficheiro PDF, CSV, XLS, XLSX, XLSM ou XLSB. Tipo detetado: "${file.type || 'desconhecido'}" Extensão: "${file.name.split('.').pop() || 'desconhecida'}"`)
       return
     }
 
     try {
+      const detectedFormat = detectDrawFormatFromFileName(file.name)
       const teams = await extractTeamsFromFile(file)
       if (!teams.length) {
         throw new Error(`Não foi possível extrair equipas do ficheiro selecionado. Tipo: "${file.type || 'desconhecido'}" Ext: "${file.name.split('.').pop() || 'desconhecida'}"`)
@@ -601,15 +635,25 @@ export default function App() {
 
       setSelectedFile(file)
       setExtractedTeams(teams)
+      setDetectedFileFormat(detectedFormat)
+      setFormatMismatchConfirmed(false)
+      if (detectedFormat) setSelectedFormat(detectedFormat)
       setFileName(`${file.name} (${teams.length} equipas)`)
       setNotesConfirmed(true)
       setError('')
     } catch (err) {
       setSelectedFile(null)
       setExtractedTeams([])
+      setDetectedFileFormat('')
+      setFormatMismatchConfirmed(false)
       setFileName(file.name)
       showError(`Erro ao ler ficheiro: ${err.message}`)
     }
+  }
+
+  function updateSelectedFormat(format) {
+    setSelectedFormat(format)
+    setFormatMismatchConfirmed(false)
   }
 
   function showError(message) {
@@ -829,6 +873,10 @@ export default function App() {
       showError('Preenche os resultados ou ocorrências antes de executar este fluxo.')
       return
     }
+    if (activeWorkflow.key === 'sorteio' && hasFormatMismatch && !formatMismatchConfirmed) {
+      showError('')
+      return
+    }
 
     const today = new Date().toISOString().split('T')[0]
     if (dataInicio && dataInicio < today) {
@@ -975,13 +1023,30 @@ export default function App() {
           <div className="card-header"><span className="section-label">Formato do Sorteio</span></div>
           <div className="format-grid">
             {DRAW_FORMATS.map((option) => (
-              <button key={option.key} type="button" aria-pressed={selectedFormat === option.key} className={`format-btn ${selectedFormat === option.key ? 'active' : ''}`} onClick={() => setSelectedFormat(option.key)}>
+              <button key={option.key} type="button" aria-pressed={selectedFormat === option.key} className={`format-btn ${selectedFormat === option.key ? 'active' : ''}`} onClick={() => updateSelectedFormat(option.key)}>
                 <div className="format-name">{option.label}</div>
                 <div className="format-desc">{option.description}</div>
                 <div className="format-auto-badge" style={{ display: 'none' }}>Sugerido para as tuas equipas</div>
               </button>
             ))}
           </div>
+          {hasFormatMismatch && !formatMismatchConfirmed && (
+            <div className="compatibility-warning" role="alert">
+              <div className="compatibility-warning__title">Formatos incompatíveis</div>
+              <p>
+                O ficheiro parece ser de <strong>{detectedFileFormatConfig?.label}</strong>, mas o torneio está definido como <strong>{selectedFormatConfig.label}</strong>.
+                Deseja proceder mesmo assim?
+              </p>
+              <div className="compatibility-warning__actions">
+                <button type="button" className="secondary-btn" onClick={() => updateSelectedFormat(detectedFileFormat)}>
+                  Usar {detectedFileFormatConfig?.label}
+                </button>
+                <button type="button" className="warning-confirm-btn" onClick={() => setFormatMismatchConfirmed(true)}>
+                  Proceder
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="card">
