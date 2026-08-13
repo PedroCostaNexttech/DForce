@@ -911,15 +911,19 @@ export default function App() {
         return
       }
 
-      const response = await fetch(getDrawWorkflowUrl(activeWorkflow, selectedFormatConfig), { method: 'POST', body: formData })
+      const workflowUrl = getDrawWorkflowUrl(activeWorkflow, selectedFormatConfig)
+      const response = await fetch(workflowUrl, { method: 'POST', body: formData })
       const responseBody = await readN8nResponse(response)
       if (!response.ok) {
         const rawMessage = responseBody.rawText?.trim()
+        const targetUrl = response.headers.get('x-dforce-target-url')
         const parsedMessage = responseBody.data && typeof responseBody.data === 'object'
           ? responseBody.data.message || responseBody.data.error || responseBody.data.detail
           : ''
         const extra = [
           `HTTP ${response.status}`,
+          `url: ${workflowUrl}`,
+          targetUrl ? `destino: ${targetUrl}` : '',
           responseBody.contentType ? `content-type: ${responseBody.contentType}` : '',
           rawMessage ? `corpo: ${rawMessage.slice(0, 500)}` : 'corpo vazio',
         ].filter(Boolean).join(' | ')

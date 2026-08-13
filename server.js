@@ -39,6 +39,11 @@ function sendText(response, status, text) {
   response.end(text)
 }
 
+function sendJson(response, status, payload) {
+  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  response.end(JSON.stringify(payload))
+}
+
 function getForwardHeaders(request, targetUrl) {
   const headers = new Headers(request.headers)
   const target = new URL(targetUrl)
@@ -72,6 +77,20 @@ async function proxyWebhook(request, response) {
     ? `${directWebhookUrl.replace(/\/+$/, '')}${request.url.includes('?') ? `?${request.url.split('?').slice(1).join('?')}` : ''}`
     : `${n8nBaseUrl}/${targetPath}`
 
+  console.log(`[webhook-proxy] ${request.method} ${request.url} -> ${targetUrl}`)
+
+  if (request.url.includes('__debug=1')) {
+    sendJson(response, 200, {
+      requestUrl: request.url,
+      targetPath,
+      webhookKey,
+      usingDirectWebhookUrl: !!directWebhookUrl,
+      targetUrl,
+      configuredBaseUrl: n8nBaseUrl || null,
+    })
+    return
+  }
+
   try {
     const upstream = await fetch(targetUrl, {
       method: request.method,
@@ -80,7 +99,10 @@ async function proxyWebhook(request, response) {
       duplex: 'half',
     })
 
-    response.writeHead(upstream.status, Object.fromEntries(upstream.headers.entries()))
+    response.writeHead(upstream.status, {
+      ...Object.fromEntries(upstream.headers.entries()),
+      'x-dforce-target-url': targetUrl,
+    })
     if (upstream.body) {
       await upstream.body.pipeTo(new WritableStream({
         write(chunk) {
