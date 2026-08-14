@@ -121,6 +121,15 @@ function normalizeText(value) {
     .trim()
 }
 
+function repairPortugueseText(value) {
+  return String(value || '')
+    .replace(/Famalic\?o/g, 'Famalicão')
+    .replace(/Vit\?ria/g, 'Vitória')
+    .replace(/Qualifica\?\?o/g, 'Qualificação')
+    .replace(/Dura\?\?o/g, 'Duração')
+    .replace(/Transi\?\?o/g, 'Transição')
+}
+
 function detectDrawFormatFromFileName(fileName) {
   const name = normalizeText(fileName)
   if (!name) return ''
@@ -166,7 +175,9 @@ function getInitials(name) {
 
 function phaseOrder(phase) {
   const value = String(phase || '').toLowerCase()
-  if (value.includes('grupo') || value.includes('jornada')) return 0
+  const jornada = value.match(/jornada\s*(\d+)/i)
+  if (jornada) return Number(jornada[1])
+  if (value.includes('grupo')) return 0
   if (value.includes('oitav')) return 1
   if (value.includes('quart')) return 2
   if (value.includes('meia') || value.includes('semi')) return 3
@@ -174,11 +185,25 @@ function phaseOrder(phase) {
   return 5
 }
 
+function getScheduleBucket(match) {
+  const phase = String(match?.phase || 'Fase')
+  const round = String(match?.round || match?.jornada || '').trim()
+  if (/grupo/i.test(phase) && round) return round
+  return phase
+}
+
 function formatDate(value) {
   if (!value) return '—'
   const date = new Date(`${value}T00:00:00`)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }).replace('.', '')
+}
+
+function formatDateInputValue(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function isKO(phase) {
@@ -199,6 +224,7 @@ function getPhaseDisplayLabel(phase) {
 
   if (!value) return ''
   if (lower.includes('grupo')) return getGroupLabel(value)
+  if (lower.includes('jornada')) return value.replace(/^jornada/i, 'Jornada')
   if (lower.includes('oitav')) return 'Oitavos de Final'
   if (lower.includes('quart')) return 'Quartos de Final'
   if (lower.includes('meia') || lower.includes('semi')) return 'Meias-Finais'
@@ -316,8 +342,9 @@ function pushTeamCandidate(set, candidate) {
     .replace(/[|;]+$/g, '')
     .trim()
 
-  if (!isLikelyTeamName(raw)) return
-  set.add(raw)
+  const repaired = repairPortugueseText(raw)
+  if (!isLikelyTeamName(repaired)) return
+  set.add(repaired)
 }
 
 function findTeamColumns(rows) {
@@ -441,8 +468,8 @@ async function extractTeamsFromFile(file) {
 function normalizeMatch(raw, index = 0, phaseFallback = 'Fase') {
   if (!raw || typeof raw !== 'object') return null
 
-  const homeTeam = raw.homeTeam || raw.home_team || raw.home || raw.casa || ''
-  const awayTeam = raw.awayTeam || raw.away_team || raw.away || raw.fora || ''
+  const homeTeam = repairPortugueseText(raw.homeTeam || raw.home_team || raw.home || raw.casa || '')
+  const awayTeam = repairPortugueseText(raw.awayTeam || raw.away_team || raw.away || raw.fora || '')
   if (!homeTeam || !awayTeam) return null
 
   const rawGroup = raw.group || raw.groupName || raw.grupo || raw.group_id || raw.groupId
@@ -475,6 +502,33 @@ function shuffleArray(array) {
   return a
 }
 
+function buildRoundRobinRounds(teams = []) {
+  if (!teams || teams.length < 2) return []
+  const pool = teams.length % 2 === 0 ? [...teams] : [...teams, null]
+  const rounds = []
+  const roundCount = pool.length - 1
+  const half = pool.length / 2
+
+  for (let round = 0; round < roundCount; round += 1) {
+    const roundMatches = []
+    for (let i = 0; i < half; i += 1) {
+      const home = pool[i]
+      const away = pool[pool.length - 1 - i]
+      if (home && away) {
+        const reverse = round % 2 === 1
+        roundMatches.push({
+          homeTeam: reverse ? away : home,
+          awayTeam: reverse ? home : away,
+        })
+      }
+    }
+    rounds.push(roundMatches)
+    pool.splice(1, 0, pool.pop())
+  }
+
+  return rounds
+}
+
 function generateGroupMatches(teams = [], groupSize = 4) {
   if (!teams || !teams.length) return []
   const numGroups = Math.max(1, Math.ceil(teams.length / groupSize))
@@ -485,23 +539,31 @@ function generateGroupMatches(teams = [], groupSize = 4) {
   groups.forEach((groupTeams, gIndex) => {
     const groupLabel = String.fromCharCode(65 + gIndex)
     const phase = formatGroupPhase(`grupo ${groupLabel}`)
-    for (let i = 0; i < groupTeams.length; i += 1) {
-      for (let j = i + 1; j < groupTeams.length; j += 1) {
-        matches.push({ id: `gen-${phase}-${gIndex}-${i}-${j}`, phase, homeTeam: groupTeams[i], awayTeam: groupTeams[j] })
-      }
-    }
+    buildRoundRobinRounds(groupTeams).forEach((roundMatches, roundIndex) => {
+      roundMatches.forEach((roundMatch, matchIndex) => {
+        matches.push({
+          id: `gen-${phase}-j${roundIndex + 1}-${matchIndex}`,
+          phase,
+          round: `Jornada ${roundIndex + 1}`,
+          ...roundMatch,
+        })
+      })
+    })
   })
   return matches
 }
 
 function generateLeagueMatches(teams = []) {
-  if (!teams || teams.length < 2) return []
   const matches = []
-  for (let i = 0; i < teams.length; i += 1) {
-    for (let j = i + 1; j < teams.length; j += 1) {
-      matches.push({ id: `gen-liga-${i}-${j}`, phase: 'Liga', homeTeam: teams[i], awayTeam: teams[j] })
-    }
-  }
+  buildRoundRobinRounds(teams).forEach((roundMatches, roundIndex) => {
+    roundMatches.forEach((roundMatch, matchIndex) => {
+      matches.push({
+        id: `gen-liga-j${roundIndex + 1}-${matchIndex}`,
+        phase: `Jornada ${roundIndex + 1}`,
+        ...roundMatch,
+      })
+    })
+  })
   return matches
 }
 
@@ -832,22 +894,11 @@ export default function App() {
       const [hours, minutes] = String(timeValue || '00:00').split(':').map(Number)
       return new Date(year, month - 1, day, hours, minutes)
     }
-
-    const nextAvailable = {}
-    campos.forEach((campo) => {
-      nextAvailable[campo] = parseDateTime(startDate, startTime)
-    })
-
-    matches.forEach((match) => {
-      if (!options.force && match.venue && (match.date || match.time)) {
-        const dateValue = match.date || startDate
-        const timeValue = match.time || startTime
-        const end = new Date(parseDateTime(dateValue, timeValue).getTime() + (Number(match.duration || durationMinutes) + transition) * 60000)
-        if (nextAvailable[match.venue] && end > nextAvailable[match.venue]) {
-          nextAvailable[match.venue] = end
-        }
-      }
-    })
+    const addDays = (dateValue, days) => {
+      const date = parseDateTime(dateValue, startTime)
+      date.setDate(date.getDate() + days)
+      return formatDateInputValue(date)
+    }
 
     if (options.priorityTeams?.length) {
       const rank = new Map(options.priorityTeams.map((team, index) => [String(team).toLowerCase(), index]))
@@ -859,35 +910,54 @@ export default function App() {
       matches.sort((a, b) => score(a) - score(b) || phaseOrder(a.phase) - phaseOrder(b.phase))
     }
 
+    const byPhase = new Map()
     matches.forEach((match) => {
-      if (!options.force && match.venue && match.time) return
+      const key = getScheduleBucket(match)
+      if (!byPhase.has(key)) byPhase.set(key, [])
+      byPhase.get(key).push(match)
+    })
+
+    const orderedPhases = [...byPhase.keys()].sort((a, b) => phaseOrder(a) - phaseOrder(b) || String(a).localeCompare(String(b), 'pt'))
+
+    orderedPhases.forEach((phase, phaseIndex) => {
+      const day = addDays(startDate, phaseIndex)
+      const nextAvailable = {}
+      campos.forEach((campo) => {
+        nextAvailable[campo] = parseDateTime(day, startTime)
+      })
 
       const teamEarliest = (team) => {
         if (!options.earliestTimes) return null
         const time = options.earliestTimes[team] || options.earliestTimes[String(team).toLowerCase()]
-        return time ? parseDateTime(startDate, time) : null
+        return time ? parseDateTime(day, time) : null
       }
 
-      let chosenCampo = campos[0]
-      let bestTime = null
-      campos.forEach((campo) => {
-        const base = nextAvailable[campo] || parseDateTime(startDate, startTime)
-        const homeRequired = teamEarliest(match.homeTeam) || teamEarliest(match.home_team)
-        const awayRequired = teamEarliest(match.awayTeam) || teamEarliest(match.away_team)
-        let candidate = base
-        if (homeRequired && homeRequired > candidate) candidate = homeRequired
-        if (awayRequired && awayRequired > candidate) candidate = awayRequired
-        if (!bestTime || candidate < bestTime) {
-          chosenCampo = campo
-          bestTime = candidate
-        }
-      })
+      byPhase.get(phase).forEach((match) => {
+        if (!force && match.venue && match.time && match.date) return
 
-      const dt = new Date(bestTime || nextAvailable[chosenCampo] || parseDateTime(startDate, startTime))
-      match.date = dt.toISOString().slice(0, 10)
-      match.time = dt.toTimeString().slice(0, 5)
-      match.venue = chosenCampo
-      nextAvailable[chosenCampo] = new Date(dt.getTime() + (Number(match.duration || durationMinutes) + transition) * 60000)
+        let chosenCampo = campos[0]
+        let bestTime = null
+        campos.forEach((campo) => {
+          const base = nextAvailable[campo] || parseDateTime(day, startTime)
+          const homeRequired = teamEarliest(match.homeTeam) || teamEarliest(match.home_team)
+          const awayRequired = teamEarliest(match.awayTeam) || teamEarliest(match.away_team)
+          let candidate = base
+          if (homeRequired && homeRequired > candidate) candidate = homeRequired
+          if (awayRequired && awayRequired > candidate) candidate = awayRequired
+          if (!bestTime || candidate < bestTime) {
+            chosenCampo = campo
+            bestTime = candidate
+          }
+        })
+
+        const dt = new Date(bestTime || nextAvailable[chosenCampo] || parseDateTime(day, startTime))
+        match.date = formatDateInputValue(dt)
+        match.time = dt.toTimeString().slice(0, 5)
+        match.venue = chosenCampo
+        match.duration = Number(match.duration || durationMinutes)
+        match.status = match.status || 'Agendado'
+        nextAvailable[chosenCampo] = new Date(dt.getTime() + (Number(match.duration || durationMinutes) + transition) * 60000)
+      })
     })
 
     return matches
@@ -958,6 +1028,12 @@ export default function App() {
 
     if (warnings.length) setError(`Avisos: ${warnings.join(' | ')}`)
     return matches
+  }
+
+  function updateMatch(matchId, patch) {
+    const applyPatch = (matches) => matches.map((match) => (match.id === matchId ? { ...match, ...patch } : match))
+    setResultMatches((current) => applyPatch(current))
+    setLastMatchesData((current) => applyPatch(current))
   }
 
   function buildTournamentFormData(teams, parsedPayload) {
@@ -1090,10 +1166,9 @@ export default function App() {
         throw new Error(`Resposta do n8n não é JSON. ${extra}`)
       }
 
-      let matches = extractMatchesFromN8nResponse(data, selectedFormat)
-      if (selectedFormat === 'liga') {
-        matches = matches.map((match) => ({ ...match, phase: 'Liga', group: undefined }))
-      }
+      const matches = selectedFormat === 'liga'
+        ? generateLeagueMatches(teams)
+        : extractMatchesFromN8nResponse(data, selectedFormat)
       const shouldRenderMatches = activeWorkflow.expectsMatches || matches.length > 0
       if (shouldRenderMatches && !matches.length) {
         setLastResponseDebug(data)
@@ -1380,16 +1455,53 @@ export default function App() {
                     </div>
                     {activePhase.matches.map((match) => (
                       <div className="match-row" key={match.id}>
-                        <div className="col-date">
-                          <div className="match-date">{formatDate(match.date)}</div>
-                          <div className="match-time">{match.time || '—'}</div>
+                        <div className="col-date match-edit-stack">
+                          <input
+                            className="match-edit-input"
+                            type="date"
+                            value={match.date || ''}
+                            onChange={(event) => updateMatch(match.id, { date: event.target.value })}
+                          />
+                          <input
+                            className="match-edit-input"
+                            type="time"
+                            value={match.time || ''}
+                            onChange={(event) => updateMatch(match.id, { time: event.target.value })}
+                          />
                         </div>
-                        <div className="col-field"><span className="field-badge">{match.venue || '—'}</span></div>
-                        <div className="col-home"><span className="team-name">{match.homeTeam}</span></div>
+                        <div className="col-field">
+                          <select
+                            className="match-edit-input match-edit-select"
+                            value={match.venue || ''}
+                            onChange={(event) => updateMatch(match.id, { venue: event.target.value })}
+                          >
+                            {campos.map((campo) => <option key={campo} value={campo}>{campo}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-home"><input className="match-team-input" value={match.homeTeam || ''} onChange={(event) => updateMatch(match.id, { homeTeam: event.target.value })} /></div>
                         <div className="col-score"><div className="score-box">VS</div></div>
-                        <div className="col-away"><span className="team-name">{match.awayTeam}</span></div>
-                        <div className="col-dur">{match.duration ? `${match.duration}min` : '—'}</div>
-                        <div className="col-status"><span className="status-badge">Agendado</span></div>
+                        <div className="col-away"><input className="match-team-input" value={match.awayTeam || ''} onChange={(event) => updateMatch(match.id, { awayTeam: event.target.value })} /></div>
+                        <div className="col-dur">
+                          <input
+                            className="match-edit-input match-duration-input"
+                            type="number"
+                            min="1"
+                            value={match.duration || duracao}
+                            onChange={(event) => updateMatch(match.id, { duration: Number(event.target.value) })}
+                          />
+                        </div>
+                        <div className="col-status">
+                          <select
+                            className="match-edit-input match-edit-select"
+                            value={match.status || 'Agendado'}
+                            onChange={(event) => updateMatch(match.id, { status: event.target.value })}
+                          >
+                            <option value="Agendado">Agendado</option>
+                            <option value="Em curso">Em curso</option>
+                            <option value="Concluído">Concluído</option>
+                            <option value="Adiado">Adiado</option>
+                          </select>
+                        </div>
                       </div>
                     ))}
                   </div>
