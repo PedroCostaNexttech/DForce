@@ -437,8 +437,11 @@ textarea:focus-visible {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.matches-head { display: grid; grid-template-columns: 70px 70px minmax(0, 1fr) 72px minmax(0, 1fr) 80px 76px; gap: 6px; padding: 8px 24px; background: var(--surface2); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.match-row { display: grid; grid-template-columns: 70px 70px minmax(0, 1fr) 72px minmax(0, 1fr) 80px 76px; gap: 6px; align-items: center; padding: 9px 24px; border-top: 1px solid var(--border); }
+.phase-matches {
+  overflow-x: auto;
+}
+.matches-head { display: grid; grid-template-columns: 132px 112px minmax(170px, 1fr) 58px minmax(170px, 1fr) 86px 128px; gap: 10px; min-width: 900px; padding: 10px 24px; background: var(--surface2); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.match-row { display: grid; grid-template-columns: 132px 112px minmax(170px, 1fr) 58px minmax(170px, 1fr) 86px 128px; gap: 10px; min-width: 900px; align-items: center; padding: 10px 24px; border-top: 1px solid var(--border); }
 .match-date { font-size: 12px; font-weight: 600; color: var(--text); }
 .match-time { font-size: 11px; color: var(--muted); }
 .field-badge { display: inline-block; background: var(--blue-light); color: var(--blue); font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; }
@@ -450,25 +453,29 @@ textarea:focus-visible {
 .col-dur { text-align: right; font-size: 11px; color: var(--muted); }
 .col-status { text-align: right; }
 .status-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 100px; background: var(--blue-light); color: var(--blue); }
-.match-edit-stack { display: flex; flex-direction: column; gap: 4px; }
+.match-edit-stack { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .match-edit-input,
 .match-team-input {
   width: 100%;
   min-width: 0;
-  border: 1px solid transparent;
+  height: 34px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
+  background: var(--surface);
   color: var(--navy);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  padding: 5px 7px;
+  padding: 6px 9px;
   transition: border-color 0.16s, background 0.16s, box-shadow 0.16s;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .match-team-input { text-align: inherit; }
+.col-home .match-team-input { text-align: right; }
 .match-edit-input:hover,
 .match-team-input:hover {
-  border-color: var(--border);
+  border-color: var(--border-strong);
   background: var(--surface3);
 }
 .match-edit-input:focus,
@@ -480,9 +487,10 @@ textarea:focus-visible {
 }
 .match-edit-select {
   cursor: pointer;
+  padding-right: 28px;
 }
 .match-duration-input {
-  max-width: 68px;
+  max-width: 78px;
   margin-left: auto;
   text-align: right;
 }
@@ -515,11 +523,14 @@ textarea:focus-visible {
   .results-header, .export-bar, .phase-squares-wrap, .phase-detail-card, .group-squares-wrap, .phase-summary, .results-footer { padding-left: 16px; padding-right: 16px; }
   .export-btn { flex: 1 1 100%; justify-content: center; min-height: 40px; }
   .matches-head { display: none; }
-  .match-row { grid-template-columns: 1fr; gap: 8px; padding: 14px 16px; }
-  .col-date { display: flex; align-items: center; gap: 8px; }
+  .phase-matches { overflow-x: visible; }
+  .match-row { grid-template-columns: 1fr; min-width: 0; gap: 10px; padding: 14px 16px; background: var(--surface); }
+  .col-date { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .col-home, .col-away { justify-content: flex-start; }
   .col-score, .col-dur, .col-status { text-align: left; }
-  .match-edit-stack { flex-direction: row; }
+  .match-edit-stack { grid-template-columns: 1fr 1fr; }
+  .match-edit-input, .match-team-input { height: 38px; font-size: 13px; }
+  .col-home .match-team-input { text-align: left; }
   .match-team-input { text-align: left; }
   .match-duration-input { max-width: 100%; margin-left: 0; text-align: left; }
   .team-name { white-space: normal; }
@@ -529,4 +540,5 @@ textarea:focus-visible {
   .container { max-width: 820px; }
   .grid-3, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .format-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .matches-head, .match-row { min-width: 880px; }
 }
