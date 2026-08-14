@@ -229,13 +229,57 @@ const TEAM_NOISE_WORDS = [
   'equipa',
   'equipas',
   'campo',
+  'clube',
+  'descricao',
+  'escalao',
+  'formato',
   'hora',
+  'instrucao',
   'data',
   'duracao',
   'estado',
   'agendado',
   'casa',
   'fora',
+  'responsavel',
+  'responsaveis',
+  'treinador',
+  'treinadores',
+]
+
+const TEAM_COLUMN_HEADERS = [
+  'equipa',
+  'equipas',
+  'team',
+  'teams',
+  'nome da equipa',
+  'nome equipa',
+  'clube/equipa',
+]
+
+const NON_TEAM_COLUMN_HEADERS = [
+  'treinador',
+  'treinadores',
+  'responsavel',
+  'responsaveis',
+  'responsável',
+  'responsáveis',
+  'coach',
+  'manager',
+  'email',
+  'telefone',
+  'telemovel',
+  'telemóvel',
+  'contacto',
+  'observacoes',
+  'observações',
+  'descricao',
+  'descrição',
+  'escalao',
+  'escalão',
+  'formato',
+  'instrucao',
+  'instrução',
 ]
 
 function normalizeTeamKey(value) {
@@ -272,6 +316,31 @@ function pushTeamCandidate(set, candidate) {
 
   if (!isLikelyTeamName(raw)) return
   set.add(raw)
+}
+
+function findTeamColumns(rows) {
+  const indexes = new Set()
+  const scanLimit = Math.min(rows.length, 8)
+
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const row = rows[rowIndex]
+    if (!Array.isArray(row)) continue
+
+    row.forEach((cell, cellIndex) => {
+      const normalized = normalizeTeamKey(cell)
+      if (!normalized) return
+      if (TEAM_COLUMN_HEADERS.includes(normalized)) indexes.add(cellIndex)
+    })
+
+    if (indexes.size) break
+  }
+
+  return indexes
+}
+
+function isNonTeamHeader(value) {
+  const normalized = normalizeTeamKey(value)
+  return NON_TEAM_COLUMN_HEADERS.includes(normalized)
 }
 
 function extractTeamsFromText(text) {
@@ -314,14 +383,21 @@ async function extractTeamsFromSpreadsheet(file) {
   const teams = new Set()
 
   workbook.SheetNames.forEach((sheetName) => {
+    if (/instru|info|readme|notas/i.test(sheetName)) return
     const sheet = workbook.Sheets[sheetName]
     if (!sheet) return
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
+    const teamColumns = findTeamColumns(rows)
+
     rows.forEach((row) => {
       if (!Array.isArray(row)) return
-      row.forEach((cell) => {
+      row.forEach((cell, cellIndex) => {
         const text = String(cell || '').trim()
         if (!text) return
+
+        if (isNonTeamHeader(text)) return
+        if (teamColumns.size && !teamColumns.has(cellIndex)) return
+
         extractTeamsFromText(text).forEach((team) => teams.add(team))
       })
     })
@@ -1252,26 +1328,10 @@ export default function App() {
                   </div>
 
                   <div className="phase-matches">
-                    <div className="group-squares-wrap">
-                      <div className="group-squares-heading">
-                        <span>Equipas</span>
-                        <strong>{getPhaseDisplayLabel(activePhase.phase)}</strong>
-                      </div>
-                      <div className="group-squares-grid">
-                        {[...new Set(activePhase.matches.flatMap((match) => [match.homeTeam, match.awayTeam]))].sort().map((team) => (
-                          <button
-                            type="button"
-                            key={team}
-                            className={`group-square-card${selectedGroupTeam === team ? ' active' : ''}`}
-                            onClick={() => setSelectedGroupTeam(team)}
-                          >
-                            <div className="group-square-name">{team}</div>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="group-squares-hint">
-                        {selectedGroupTeam ? `Equipa selecionada: ${selectedGroupTeam}` : 'Clique numa equipa para a destaçar.'}
-                      </div>
+                    <div className="phase-summary">
+                      <span>{[...new Set(activePhase.matches.flatMap((match) => [match.homeTeam, match.awayTeam]).filter(Boolean))].length} equipas</span>
+                      <span>{activePhase.matches.length} jogos</span>
+                      <span>{selectedFormatConfig.label}</span>
                     </div>
 
                     <div className="matches-head">
