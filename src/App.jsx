@@ -492,6 +492,17 @@ function generateGroupMatches(teams = [], groupSize = 4) {
   return matches
 }
 
+function generateLeagueMatches(teams = []) {
+  if (!teams || teams.length < 2) return []
+  const matches = []
+  for (let i = 0; i < teams.length; i += 1) {
+    for (let j = i + 1; j < teams.length; j += 1) {
+      matches.push({ id: `gen-liga-${i}-${j}`, phase: 'Liga', homeTeam: teams[i], awayTeam: teams[j] })
+    }
+  }
+  return matches
+}
+
 function generateKnockoutMatches(teams = []) {
   if (!teams || !teams.length) return []
   const shuffled = shuffleArray(teams)
@@ -565,6 +576,9 @@ function extractMatchesFromN8nResponse(responseData, fallbackFormat = 'champions
     const teamList = Array.isArray(flatArray) && flatArray.every((t) => typeof t === 'string') ? flatArray : null
     if (teamList && teamList.length) {
       const teams = teamList.map((t) => String(t).trim()).filter(Boolean)
+      if (fallbackFormat === 'liga') {
+        return generateLeagueMatches(teams)
+      }
       if (fallbackFormat === 'grupos') {
         return generateGroupMatches(teams)
       }
@@ -627,10 +641,12 @@ function isMissingWebhookResponse(response, responseBody) {
 function buildLocalDrawResponse(teams, format, options = {}) {
   const normalizedFormat = String(format || 'champions').toLowerCase()
   const shuffledTeams = shuffleArray(teams)
-  const groupSize = normalizedFormat === 'liga' ? Math.max(teams.length, 2) : 4
+  const groupSize = 4
   let matches = []
 
-  if (normalizedFormat === 'champions' || normalizedFormat === 'grupos' || normalizedFormat === 'qualificacao' || normalizedFormat === 'liga') {
+  if (normalizedFormat === 'liga') {
+    matches = generateLeagueMatches(shuffledTeams)
+  } else if (normalizedFormat === 'champions' || normalizedFormat === 'grupos' || normalizedFormat === 'qualificacao') {
     matches = generateGroupMatches(shuffledTeams, groupSize)
   } else {
     matches = generateKnockoutMatches(shuffledTeams)
@@ -680,6 +696,7 @@ export default function App() {
   const [fileName, setFileName] = useState('ficheiro.pdf')
   const [detectedFileFormat, setDetectedFileFormat] = useState('')
   const [formatMismatchConfirmed, setFormatMismatchConfirmed] = useState(false)
+  const resultsRef = useRef(null)
 
   const activeWorkflow = useMemo(
     () => TOURNAMENT_WORKFLOWS.find((workflow) => workflow.key === selectedWorkflow) || TOURNAMENT_WORKFLOWS[0],
@@ -715,6 +732,19 @@ export default function App() {
   useEffect(() => {
     setSelectedGroupTeam('')
   }, [selectedPhaseIndex, resultMatches.length])
+
+  useEffect(() => {
+    if (!successMessage) return undefined
+    const timer = window.setTimeout(() => setSuccessMessage(''), 3000)
+    return () => window.clearTimeout(timer)
+  }, [successMessage])
+
+  useEffect(() => {
+    if (!resultMatches.length || !resultsRef.current) return
+    window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [resultMatches.length, drawCounter])
 
   async function handleFileChange(event) {
     const file = event.target.files?.[0]
@@ -1058,7 +1088,10 @@ export default function App() {
         throw new Error(`Resposta do n8n não é JSON. ${extra}`)
       }
 
-      const matches = extractMatchesFromN8nResponse(data, selectedFormat)
+      let matches = extractMatchesFromN8nResponse(data, selectedFormat)
+      if (selectedFormat === 'liga') {
+        matches = matches.map((match) => ({ ...match, phase: 'Liga', group: undefined }))
+      }
       const shouldRenderMatches = activeWorkflow.expectsMatches || matches.length > 0
       if (shouldRenderMatches && !matches.length) {
         setLastResponseDebug(data)
@@ -1067,7 +1100,7 @@ export default function App() {
 
       setExtractedTeams(teams)
       setWorkflowResponse(data)
-      showSuccess(`${activeWorkflow.label} concluído com sucesso.`)
+      showSuccess(activeWorkflow.key === 'sorteio' ? 'Sorteio gerado com sucesso.' : `${activeWorkflow.label} concluído com sucesso.`)
 
       if (matches.length) {
         const scheduled = scheduleMatches(matches, {
@@ -1265,7 +1298,7 @@ export default function App() {
 
           <div className="submit-wrap">
             <button className="submit-btn" onClick={submitWorkflow} disabled={loading}>
-              <span>{loading ? 'A processar fluxo...' : activeWorkflow.label.toUpperCase()}</span>
+              <span>{loading ? 'A processar...' : activeWorkflow.key === 'sorteio' && resultMatches.length ? 'REGERAR SORTEIO' : activeWorkflow.label.toUpperCase()}</span>
             </button>
           </div>
         </section>
@@ -1282,13 +1315,13 @@ export default function App() {
           </section>
         )}
 
-        <div className="divider" style={{ display: resultMatches.length ? 'flex' : 'none' }}>Resultado do Sorteio</div>
+        <div ref={resultsRef} className="divider" style={{ display: resultMatches.length ? 'flex' : 'none' }}>Resultado do Sorteio</div>
 
         {resultMatches.length > 0 && (
           <section className="card">
             <div className="results-header">
-              <div className="results-title">{selectedFormatConfig.label} — Sorteio #{drawCounter}</div>
-              <div className="results-meta">{resultMatches.length} jogos · {phases.length} fases</div>
+              <div className="results-title">{selectedFormatConfig.label}{tournamentName.trim() ? ` — ${tournamentName.trim()}` : ''}</div>
+              <div className="results-meta">{resultMatches.length} jogos · {phases.length === 1 ? getPhaseDisplayLabel(phases[0]?.phase) : `${phases.length} fases`}</div>
             </div>
 
             <div className="export-bar">
@@ -1299,7 +1332,7 @@ export default function App() {
 
             {phases.length > 0 && activePhase && (
               <div className="phase-showcase">
-                <div className="phase-squares-wrap">
+                {phases.length > 1 && <div className="phase-squares-wrap">
                   {phases.map((phaseItem, index) => {
                     const isGroup = /grupo/i.test(phaseItem.phase)
                     return (
@@ -1311,11 +1344,11 @@ export default function App() {
                       >
                         <span className="phase-square-label">{getPhaseDisplayLabel(phaseItem.phase)}</span>
                         <small>{phaseItem.matches.length} jogos</small>
-                        <em>{isGroup ? 'Grupo' : 'Fase'}</em>
+                        <em>{isGroup ? 'Grupo' : getPhaseDisplayLabel(phaseItem.phase)}</em>
                       </button>
                     )
                   })}
-                </div>
+                </div>}
 
                 <div className="phase-detail-card">
                   <div className="phase-header">

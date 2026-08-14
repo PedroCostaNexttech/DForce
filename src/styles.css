@@ -330,7 +330,12 @@ textarea:focus-visible {
 .error-box { margin: 0 24px 16px; background: rgba(220, 38, 38, 0.06); border: 1px solid rgba(220, 38, 38, 0.2); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #b91c1c; display: none; white-space: pre-wrap; line-height: 1.6; }
 .error-box.visible { display: block; }
 .success-box { margin: 0 24px 16px; background: rgba(10, 138, 74, 0.08); border: 1px solid rgba(10, 138, 74, 0.22); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #07683a; display: none; white-space: pre-wrap; line-height: 1.6; font-weight: 600; }
-.success-box.visible { display: block; }
+.success-box.visible { display: block; animation: successFadeOut 3s ease forwards; }
+
+@keyframes successFadeOut {
+  0%, 72% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
 
 .notes-preview {
   background: var(--surface2);
