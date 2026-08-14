@@ -567,6 +567,21 @@ function generateLeagueMatches(teams = []) {
   return matches
 }
 
+function getUniqueMatchTeams(matches = []) {
+  const seen = new Set()
+  const teams = []
+  matches.forEach((match) => {
+    ;[match.homeTeam, match.awayTeam].forEach((team) => {
+      const name = repairPortugueseText(team).trim()
+      const key = normalizeTeamKey(name)
+      if (!name || seen.has(key)) return
+      seen.add(key)
+      teams.push(name)
+    })
+  })
+  return teams
+}
+
 function generateKnockoutMatches(teams = []) {
   if (!teams || !teams.length) return []
   const shuffled = shuffleArray(teams)
@@ -1166,9 +1181,10 @@ export default function App() {
         throw new Error(`Resposta do n8n não é JSON. ${extra}`)
       }
 
+      const responseMatches = extractMatchesFromN8nResponse(data, selectedFormat)
       const matches = selectedFormat === 'liga'
-        ? generateLeagueMatches(teams)
-        : extractMatchesFromN8nResponse(data, selectedFormat)
+        ? generateLeagueMatches(teams.length ? teams : getUniqueMatchTeams(responseMatches))
+        : responseMatches
       const shouldRenderMatches = activeWorkflow.expectsMatches || matches.length > 0
       if (shouldRenderMatches && !matches.length) {
         setLastResponseDebug(data)
@@ -1398,7 +1414,7 @@ export default function App() {
           <section className="card">
             <div className="results-header">
               <div className="results-title">{selectedFormatConfig.label}{tournamentName.trim() ? ` — ${tournamentName.trim()}` : ''}</div>
-              <div className="results-meta">{resultMatches.length} jogos · {phases.length === 1 ? getPhaseDisplayLabel(phases[0]?.phase) : `${phases.length} fases`}</div>
+              <div className="results-meta">{resultMatches.length} jogos · {selectedFormat === 'liga' ? `${phases.length} jornadas` : phases.length === 1 ? getPhaseDisplayLabel(phases[0]?.phase) : `${phases.length} fases`}</div>
             </div>
 
             <div className="export-bar">
@@ -1441,7 +1457,7 @@ export default function App() {
                     <div className="phase-summary">
                       <span>{[...new Set(activePhase.matches.flatMap((match) => [match.homeTeam, match.awayTeam]).filter(Boolean))].length} equipas</span>
                       <span>{activePhase.matches.length} jogos</span>
-                      <span>{selectedFormatConfig.label}</span>
+                        <span>{selectedFormat === 'liga' ? getPhaseDisplayLabel(activePhase.phase) : selectedFormatConfig.label}</span>
                     </div>
 
                     <div className="matches-head">
