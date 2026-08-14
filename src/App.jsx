@@ -538,6 +538,16 @@ async function readN8nResponse(response) {
   return { data: null, rawText, contentType }
 }
 
+function isMissingWebhookResponse(response, responseBody) {
+  const contentType = responseBody?.contentType || ''
+  const rawMessage = responseBody?.rawText?.trim() || ''
+  const isHtml404 = response.status === 404 && /text\/html/i.test(contentType)
+  const saysCannotRoute = /Cannot\s+(POST|GET|PUT|PATCH|DELETE)(\s+\/|\s*$)/i.test(rawMessage)
+  const hasHtmlErrorPage = /<title>Error<\/title>|<pre>Cannot\s+/i.test(rawMessage)
+
+  return response.status === 404 && (isHtml404 || saysCannotRoute || hasHtmlErrorPage)
+}
+
 function buildLocalDrawResponse(teams, format, options = {}) {
   const normalizedFormat = String(format || 'champions').toLowerCase()
   const shuffledTeams = shuffleArray(teams)
@@ -942,8 +952,7 @@ export default function App() {
         const targetUrl = response.headers.get('x-dforce-target-url')
         const canUseLocalFallback =
           activeWorkflow.key === 'sorteio' &&
-          response.status === 404 &&
-          /Cannot\s+(POST|GET)\s+\//i.test(rawMessage || '')
+          isMissingWebhookResponse(response, responseBody)
 
         if (canUseLocalFallback) {
           const localData = buildLocalDrawResponse(teams, selectedFormat, { tournamentName })
